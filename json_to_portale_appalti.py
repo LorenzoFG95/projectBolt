@@ -160,6 +160,27 @@ def process_notice(cur, data: Dict[str, Any]):
             data_pcp,
         ),
     )
+    
+    # ----------------------------------------------------
+    # Bando dettaglio (aggiunto per tipo_procedura_aggiudicazione)
+    # ----------------------------------------------------
+    # Cerca il campo tipo_procedura_aggiudicazione nella sezione B
+    tipo_procedura = None
+    for section in data["template"][0]["template"]["sections"]:
+        if section["name"] == "SEZ. B - Dati Generali" and "fields" in section:
+            tipo_procedura = section["fields"].get("tipo_procedura_aggiudicazione")
+            break
+    
+    # Se trovato, inserisci nella tabella bando_dettaglio
+    if tipo_procedura:
+        cur.execute(
+            """
+            INSERT INTO bando_dettaglio (gara_id, tipo_scelta_contraente)
+            VALUES (%s, %s)
+            ON DUPLICATE KEY UPDATE tipo_scelta_contraente = VALUES(tipo_scelta_contraente)
+            """,
+            (gara_id, tipo_procedura)
+        )
 
     # ----------------------------------------------------
     # Lotti
