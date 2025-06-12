@@ -127,16 +127,25 @@ def process_notice(cur, data: Dict[str, Any]):
     )
 
     # ----------------------------------------------------
+    # Calcola il valore totale dell'appalto
+    # ----------------------------------------------------
+    items = data["template"][0]["template"]["sections"][2]["items"]
+    importo_totale = 0.0
+    for lot in items:
+        if lot.get("tipo_oggetto") == "lotto" and lot.get("valore_complessivo_stimato"):
+            importo_totale += float(lot.get("valore_complessivo_stimato"))
+
+    # ----------------------------------------------------
     # Gara
     # ----------------------------------------------------
     descrizione_gara = data["template"][0]["template"]["metadata"]["descrizione"]
     data_pub = parse_datetime(data.get("dataPubblicazione"))
 
     sql_gara = (
-        "INSERT INTO gara (ocid, ente_appaltante_id, descrizione, data_pubblicazione) "
-        "VALUES (%s, %s, %s, %s) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)"
+        "INSERT INTO gara (ocid, ente_appaltante_id, descrizione, data_pubblicazione, importo_totale) "
+        "VALUES (%s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id), importo_totale=VALUES(importo_totale)"
     )
-    cur.execute(sql_gara, (id_appalto, ente_id, descrizione_gara, data_pub))
+    cur.execute(sql_gara, (id_appalto, ente_id, descrizione_gara, data_pub, importo_totale))
     gara_id = cur.lastrowid
 
     # ----------------------------------------------------
@@ -201,13 +210,35 @@ def process_notice(cur, data: Dict[str, Any]):
         criterio_code = CRITERIO_MAP.get(lot.get("criteri_aggiudicazione"))
         criterio_id = fetch_id(cur, "criterio_aggiudicazione", "codice", criterio_code)
         termine = parse_datetime(lot.get("termine_ricezione"))
+        
+        # Gestione CPV
+        cpv_descrizione = lot.get("cpv")
+        cpv_id = None
+        if cpv_descrizione:
+            # Genera un codice più unico basato su un hash della descrizione
+            import hashlib
+            # Crea un hash della descrizione e prendi i primi 6 caratteri
+            hash_obj = hashlib.md5(cpv_descrizione.encode())
+            hash_prefix = hash_obj.hexdigest()[:6]
+            # Usa un prefisso più un hash per il codice (totale 10 caratteri)
+            cpv_codice = f"CPV{hash_prefix}"
+            
+            cpv_id = fetch_id(
+                cur,
+                "categoria_cpv",
+                "codice",
+                cpv_codice,
+                create_if_missing=True,
+                descrizione=cpv_descrizione
+            )
+        
         cur.execute(
             """
             INSERT INTO lotto (
               gara_id, cig, descrizione, natura_principale_id, valore,
               criterio_aggiudicazione_id, termine_ricezione, accordo_quadro,
-              sistema_dinamico_acq, asta_elettronica, luogo_istat
-            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+              sistema_dinamico_acq, asta_elettronica, luogo_istat, cpv_id
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
             ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)
             """,
             (
@@ -222,6 +253,7 @@ def process_notice(cur, data: Dict[str, Any]):
                 lot.get("sistema_dinamico_acquisizione"),
                 1 if lot.get("asta_elettronica", "false").lower() == "true" else 0,
                 lot.get("luogo_istat")[:10] if lot.get("luogo_istat") else None,  # Limita a 10 caratteri
+                cpv_id,
             ),
         )
 
