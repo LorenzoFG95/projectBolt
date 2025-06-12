@@ -7,8 +7,9 @@
     "dev": "concurrently \"npm run dev:server\" \"wait-on http://localhost:3001/api/health && npm run dev:client\"",
     "dev:client": "vite",
     "dev:server": "cross-env DB_HOST=127.0.0.1 DB_USER=root DB_PASSWORD=nuova_password_sicura DB_NAME=portale_appalti tsx watch server/index.ts",
-    "build": "vite build",
+    "build": "vite build && npm run build:server",
     "build:server": "tsc -p server/tsconfig.json",
+    "start": "node dist/server/index.js",
     "lint": "eslint .",
     "preview": "vite preview"
   },

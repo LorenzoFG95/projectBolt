@@ -1,6 +1,7 @@
 import { OCDSTender, TenderFilters, PaginatedResponse, FilterOptions } from '../types/ocds';
 
-const API_BASE_URL = 'http://localhost:3001/api';
+// Modifica questa riga
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 class ApiService {
   async getTenders(
