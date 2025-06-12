@@ -12,4 +12,5 @@ RUN npm run build
 
 EXPOSE 3001
 
-CMD ["npm", "start"]
+# Specifica esplicitamente il comando di avvio
+CMD ["node", "dist/server/index.js"]
