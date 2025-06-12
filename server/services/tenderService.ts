@@ -16,9 +16,9 @@ class TenderService {
           e.id AS ente_id, e.denominazione AS ente_nome, e.codice_fiscale AS ente_cf,
           sp.codice AS status,
           np.codice AS categoria,
-          l.id AS lotto_id, l.cig AS lotto_cig, l.descrizione AS lotto_desc,
-          l.valore AS lotto_valore, l.termine_ricezione,
-          cpv.codice AS cpv_code, cpv.descrizione AS cpv_desc,
+          MAX(l.id) AS lotto_id, MAX(l.cig) AS lotto_cig, MAX(l.descrizione) AS lotto_desc,
+          MAX(l.valore) AS lotto_valore, MAX(l.termine_ricezione) AS termine_ricezione,
+          MAX(cpv.codice) AS cpv_code, MAX(cpv.descrizione) AS cpv_desc,
           ca.codice AS criterio_codice
         FROM gara g
         LEFT JOIN ente_appaltante e ON g.ente_appaltante_id = e.id
@@ -80,7 +80,6 @@ class TenderService {
       }
       
       // Query per contare il totale dei risultati
-      // Costruisci una query di conteggio separata
       let countQuery = `
         SELECT COUNT(DISTINCT g.id) as total
         FROM gara g
@@ -94,23 +93,50 @@ class TenderService {
       `;
       
       // Applica gli stessi filtri alla query di conteggio
-      // (Copia qui le stesse condizioni di filtro che hai applicato alla query principale)
       if (filters.search) {
         countQuery += ` AND (g.descrizione LIKE ? OR g.cig LIKE ? OR e.denominazione LIKE ?)`;
-        // Non aggiungere i parametri qui, li useremo gli stessi della query principale
       }
       
-      // Applica gli altri filtri allo stesso modo...
+      if (filters.contractingAuthority) {
+        countQuery += ` AND e.denominazione LIKE ?`;
+      }
       
-      const [countResult] = await pool.query(countQuery, queryParams.slice(0, -2)); // Rimuovi i parametri di LIMIT e OFFSET
+      if (filters.cpvCode) {
+        countQuery += ` AND (cpv.codice LIKE ? OR cpv.descrizione LIKE ?)`;
+      }
+      
+      if (filters.status) {
+        countQuery += ` AND sp.codice = ?`;
+      }
+      
+      if (filters.dateFrom) {
+        countQuery += ` AND g.data_pubblicazione >= ?`;
+      }
+      
+      if (filters.dateTo) {
+        countQuery += ` AND g.data_pubblicazione <= ?`;
+      }
+      
+      if (filters.minValue) {
+        countQuery += ` AND g.importo_totale >= ?`;
+      }
+      
+      if (filters.maxValue) {
+        countQuery += ` AND g.importo_totale <= ?`;
+      }
+      
+      if (filters.category) {
+        countQuery += ` AND np.codice = ?`;
+      }
+      
+      const [countResult] = await pool.query(countQuery, queryParams);
       const totalItems = (countResult as any)[0].total;
       
-      // Aggiunta dell'ordinamento e paginazione
-      query += ` ORDER BY g.data_pubblicazione DESC LIMIT ? OFFSET ?`;
+      // Aggiunta del GROUP BY, ordinamento e paginazione
+      query += ` GROUP BY g.id, g.ocid, g.cig, g.descrizione, g.data_pubblicazione, g.importo_totale, g.valuta, e.id, e.denominazione, e.codice_fiscale, sp.codice, np.codice, ca.codice ORDER BY g.data_pubblicazione DESC LIMIT ? OFFSET ?`;
       queryParams.push(limit, (page - 1) * limit);
       
       console.log('Query SQL:', query);
-      // Esecuzione della query principale
       console.log('Esecuzione query con parametri:', queryParams);
       const [rows] = await pool.query(query, queryParams);
       console.log('Risultati query:', rows);
